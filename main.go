@@ -7,7 +7,6 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
-	"log"
 	"os"
 	"strings"
 )
@@ -15,19 +14,18 @@ import (
 var fset = token.NewFileSet()
 
 func main() {
-	path, err := os.Getwd()
-	if err != nil {
-		log.Fatalln(err.Error())
-		return
+
+	debug := os.Getenv("DEBUG") == "true"
+
+	if debug {
+		fmt.Println("\n\nDebug start: -----------------------------")
+		fmt.Println("all arguments", os.Args)
+		fmt.Println("Package:", os.Getenv("GOPACKAGE"))
+		fmt.Println("PWD:", os.Getenv("PWD"))
+		fmt.Println("Debug end: -------------------------------")
 	}
 
-	fmt.Println("\n\nDebug start: -----------------------------")
-	fmt.Println("current directory is ", path)
-	fmt.Println("all arguments", os.Args)
-	fmt.Println("Package:", os.Getenv("GOPACKAGE"))
-	fmt.Println("PWD:", os.Getenv("PWD"))
-	fmt.Println("Debug end: -------------------------------")
-
+	// this is the current file that has //go:generate
 	fileName := os.Getenv("GOFILE")
 
 	astFile, err := parser.ParseFile(fset, fileName, nil, parser.AllErrors)
@@ -36,30 +34,36 @@ func main() {
 	}
 
 	var v Visitor
+
 	v.Interfaces = make(map[string][]Method)
 
 	ast.Walk(v, astFile)
 
 	var g Generator
+
 	g.toFile(fileName, v)
 }
 
+// Item is an smallest element of Method signature
 type Item struct {
 	Name string
 	Type string
 }
 
+// Method is a one of methods in an interface
 type Method struct {
 	Name   string
 	Input  []Item
 	Output []Item
 }
 
+// Visitor implements ast.Visitor
 type Visitor struct {
 	Imports    []string
 	Interfaces map[string][]Method
 }
 
+// Visit will go only over interfaces
 func (v Visitor) Visit(n ast.Node) ast.Visitor {
 	if n == nil {
 		return nil
@@ -199,6 +203,7 @@ mock.Mock
 			fmt.Fprintf(&buf, fmt.Sprintf(`func(%s *%s) %s`, receiverName, mockName, m.Name))
 			fmt.Fprintf(&buf, fmt.Sprintf(`(%s) (%s) {`, strings.Join(incoming, ","), strings.Join(outgoing, ",")))
 			fmt.Fprintf(&buf, "\n")
+
 			// method body ARGS
 			fmt.Fprintf(&buf, fmt.Sprintf(`args := %s.Called(`, receiverName))
 
